@@ -1,0 +1,15 @@
+name: astrbot_plugin_token_controller
+description: 精细化群聊 Token 流量控制插件：限额、模型阶梯调控、节流与可视化统计。
+short_desc: 群聊 Token 精细化流量控制插件
+version: 0.6.6
+author: 青尘工作室
+repo: "https://github.com/QingchenWait/astrbot_plugin_token_controller"
+display_name: Token 流量控制
+support_platforms:
+  - aiocqhttp
+  - qq_official
+  - qq_official_webhook
+astrbot_version: ">=4.24.2"
+pages:
+  - name: dashboard
+    title: Token 流控

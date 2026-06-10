@@ -1,0 +1,3029 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>QQ 群 Token 流控</title>
+    <script src="/api/plugin/page/bridge-sdk.js"></script>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f8fb;
+        --panel: #ffffff;
+        --text: #18202f;
+        --muted: #697386;
+        --line: #dce2ea;
+        --green: #1f9d72;
+        --red: #d84a4a;
+        --yellow: #f3c442;
+        --yellow-dark: #8a6500;
+        --blue: #2d6cdf;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        letter-spacing: 0;
+      }
+
+      button,
+      input,
+      textarea {
+        font: inherit;
+      }
+
+      .app {
+        min-height: 100vh;
+        padding: 24px;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1.6fr) minmax(280px, 0.8fr);
+        gap: 18px;
+        max-width: 1220px;
+        margin: 0 auto;
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        min-width: 0;
+      }
+
+      .panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 18px 20px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .panel-title {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 700;
+      }
+
+      .panel-subtitle {
+        margin: 4px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .usage-list {
+        display: grid;
+        gap: 16px;
+        padding: 20px;
+      }
+
+      .usage-row {
+        display: grid;
+        gap: 8px;
+      }
+
+      .usage-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        font-size: 14px;
+      }
+
+      .group-info {
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .group-text {
+        min-width: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        flex-wrap: wrap;
+      }
+
+      .group-id {
+        font-weight: 700;
+        word-break: break-all;
+      }
+
+      .group-remark {
+        color: #8a94a6;
+        font-size: 13px;
+        line-height: 1.3;
+        word-break: break-all;
+      }
+
+      .usage-value {
+        color: var(--muted);
+        white-space: nowrap;
+      }
+
+      .usage-value.fallback {
+        color: #b58100;
+        font-weight: 700;
+      }
+
+      .usage-value.stopped {
+        color: var(--red);
+        font-weight: 700;
+      }
+
+      .usage-side {
+        display: inline-flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        flex: 0 0 auto;
+      }
+
+      .fallback-tag {
+        display: inline-flex;
+        align-items: center;
+        height: 24px;
+        border-radius: 8px;
+        border: 1px solid #f0c65a;
+        background: #fff4ce;
+        color: #8a6500;
+        padding: 0 8px;
+        font-size: 12px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .stop-tag {
+        display: inline-flex;
+        align-items: center;
+        height: 24px;
+        border-radius: 8px;
+        border: 1px solid #ef9a9a;
+        background: #ffe1e1;
+        color: #b12f2f;
+        padding: 0 8px;
+        font-size: 12px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .icon-button {
+        width: 30px;
+        height: 30px;
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        transition:
+          background 150ms ease,
+          border-color 150ms ease,
+          color 150ms ease,
+          transform 80ms ease;
+      }
+
+      .icon-button:hover {
+        background: #eaf1ff;
+        border-color: #c7d8ff;
+        color: var(--blue);
+      }
+
+      .icon-button:active {
+        background: #d8e5ff;
+        border-color: #abc3fb;
+        transform: translateY(1px);
+      }
+
+      .icon-button svg {
+        width: 16px;
+        height: 16px;
+        stroke-width: 2;
+      }
+
+      .progress-track {
+        height: 14px;
+        overflow: hidden;
+        border-radius: 7px;
+        background: #edf1f6;
+        border: 1px solid #e3e8ef;
+      }
+
+      .progress-fill {
+        height: 100%;
+        width: 0%;
+        background: var(--green);
+        transition: width 180ms ease;
+      }
+
+      .progress-fill.over {
+        background: var(--red);
+      }
+
+      .progress-fill.fallback {
+        background: var(--yellow);
+      }
+
+      .progress-fill.stopped {
+        background: var(--red);
+      }
+
+      .empty {
+        padding: 42px 20px;
+        text-align: center;
+        color: var(--muted);
+      }
+
+      .feature-body {
+        padding: 20px;
+      }
+
+      .config-button {
+        width: 100%;
+        border: 1px solid #ddb33b;
+        background: var(--yellow);
+        color: var(--yellow-dark);
+        border-radius: 8px;
+        padding: 12px 14px;
+        cursor: pointer;
+        font-weight: 700;
+        margin-bottom: 10px;
+        transition:
+          background 150ms ease,
+          border-color 150ms ease,
+          color 150ms ease,
+          transform 80ms ease;
+      }
+
+      .config-button:hover {
+        background: #ffd95b;
+        border-color: #c99a14;
+        color: #5f4600;
+      }
+
+      .config-button:active {
+        background: #e7b72c;
+        border-color: #b28610;
+        transform: translateY(1px);
+      }
+
+      .strategy-button {
+        width: 100%;
+        border: 1px solid var(--blue);
+        background: var(--blue);
+        color: #fff;
+        border-radius: 8px;
+        padding: 12px 14px;
+        cursor: pointer;
+        font-weight: 700;
+        margin-bottom: 10px;
+        transition:
+          background 150ms ease,
+          border-color 150ms ease,
+          transform 80ms ease;
+      }
+
+      .strategy-button:hover {
+        background: #1f5fcf;
+        border-color: #1f5fcf;
+      }
+
+      .strategy-button:active {
+        background: #194fae;
+        border-color: #194fae;
+        transform: translateY(1px);
+      }
+
+      .status-line {
+        margin-top: 14px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .overlay {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: rgba(14, 20, 31, 0.42);
+        z-index: 20;
+      }
+
+      .overlay.open {
+        display: flex;
+      }
+
+      .overlay.compact .modal {
+        width: min(420px, 100%);
+        max-height: calc(100vh - 48px);
+      }
+
+      .modal {
+        width: min(980px, 100%);
+        max-height: min(760px, calc(100vh - 48px));
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        background: #fff;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        box-shadow: 0 18px 46px rgba(11, 18, 32, 0.22);
+        overflow: hidden;
+      }
+
+      .modal-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .modal-title {
+        font-size: 16px;
+        font-weight: 700;
+      }
+
+      .modal-actions {
+        display: flex;
+        gap: 8px;
+      }
+
+      .action-button {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+        color: var(--text);
+        padding: 8px 13px;
+        cursor: pointer;
+        transition:
+          background 150ms ease,
+          border-color 150ms ease,
+          color 150ms ease,
+          transform 80ms ease;
+      }
+
+      .action-button:hover {
+        background: #eef4ff;
+        border-color: #bfd0f2;
+        color: #1d57bb;
+      }
+
+      .action-button:active {
+        background: #dde9ff;
+        border-color: #9eb9ee;
+        transform: translateY(1px);
+      }
+
+      .action-button.primary {
+        background: var(--blue);
+        border-color: var(--blue);
+        color: #fff;
+      }
+
+      .action-button.primary:hover {
+        background: #1f5fcf;
+        border-color: #1f5fcf;
+        color: #fff;
+      }
+
+      .action-button.primary:active {
+        background: #194fae;
+        border-color: #194fae;
+      }
+
+      .action-button:disabled,
+      .action-button:disabled:hover,
+      .action-button:disabled:active {
+        background: #f3f4f6;
+        border-color: #d1d5db;
+        color: #9ca3af;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .modal-content {
+        overflow: auto;
+        padding: 4px 18px 18px;
+      }
+
+      .config-row {
+        display: grid;
+        grid-template-columns: minmax(220px, 0.85fr) minmax(260px, 1fr);
+        gap: 20px;
+        align-items: start;
+        padding: 16px 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .config-row:last-child {
+        border-bottom: 0;
+      }
+
+      .config-name {
+        font-weight: 700;
+        margin-bottom: 6px;
+      }
+
+      .config-hint {
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      .field {
+        width: 100%;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        padding: 9px 10px;
+        background: #fff;
+        color: var(--text);
+      }
+
+      .field:focus {
+        outline: 2px solid rgba(45, 108, 223, 0.18);
+        border-color: var(--blue);
+      }
+
+      textarea.field {
+        min-height: 92px;
+        resize: vertical;
+      }
+
+      .remark-form {
+        display: grid;
+        gap: 12px;
+        padding-top: 14px;
+      }
+
+      .remark-target {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .remark-hint {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .group-settings-form {
+        display: grid;
+        gap: 12px;
+        padding-top: 14px;
+      }
+
+      .group-settings-target {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .group-settings-hint {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .group-limit-control {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .group-settings-section {
+        border-top: 1px solid var(--line);
+        padding-top: 12px;
+      }
+
+      .group-settings-section-title {
+        font-weight: 700;
+        margin-bottom: 10px;
+      }
+
+      .group-settings-checkbox {
+        align-items: flex-start;
+        line-height: 1.45;
+      }
+
+      .group-settings-inline-note {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .cache-strategy-tag {
+        margin-left: 6px;
+      }
+
+      .strategy-form {
+        display: grid;
+        gap: 0;
+      }
+
+      .strategy-form .config-row:first-child {
+        padding-top: 14px;
+      }
+
+      .history-modal {
+        width: min(1080px, 100%);
+      }
+
+      .history-content {
+        display: grid;
+        gap: 14px;
+        padding-top: 14px;
+      }
+
+      .history-toolbar {
+        display: grid;
+        grid-template-columns: minmax(260px, 1fr) minmax(180px, 0.38fr) minmax(180px, 0.5fr);
+        gap: 12px;
+        align-items: center;
+      }
+
+      .custom-select {
+        position: relative;
+        min-width: 0;
+      }
+
+      .select-trigger {
+        width: 100%;
+        min-height: 42px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        background: #fff;
+        color: var(--text);
+        padding: 9px 11px;
+        cursor: pointer;
+        transition:
+          background 150ms ease,
+          border-color 150ms ease,
+          color 150ms ease,
+          transform 80ms ease;
+      }
+
+      .select-trigger:hover,
+      .custom-select.open .select-trigger {
+        background: #eef4ff;
+        border-color: #bfd0f2;
+        color: #1d57bb;
+      }
+
+      .select-trigger:active {
+        background: #dde9ff;
+        border-color: #9eb9ee;
+        transform: translateY(1px);
+      }
+
+      .select-label {
+        min-width: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .select-arrow {
+        flex: 0 0 auto;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .select-menu {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        right: 0;
+        z-index: 30;
+        display: none;
+        max-height: 280px;
+        overflow: auto;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 14px 34px rgba(11, 18, 32, 0.16);
+      }
+
+      .custom-select.open .select-menu {
+        display: block;
+      }
+
+      .select-option {
+        width: 100%;
+        min-height: 42px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border: 0;
+        background: #fff;
+        color: var(--text);
+        padding: 10px 12px;
+        cursor: pointer;
+        text-align: left;
+        transition:
+          background 150ms ease,
+          color 150ms ease;
+      }
+
+      .select-option:hover {
+        background: #eef4ff;
+        color: #1d57bb;
+      }
+
+      .select-option:active,
+      .select-option.selected {
+        background: #dde9ff;
+        color: #194fae;
+      }
+
+      .select-option-main {
+        min-width: 0;
+        flex: 1 1 auto;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: center;
+      }
+
+      .select-option-id {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-weight: 700;
+      }
+
+      .select-option-usage {
+        color: var(--muted);
+        font-size: 13px;
+        white-space: nowrap;
+      }
+
+      .select-option-usage-wrap {
+        display: inline-flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 7px;
+        min-width: 0;
+      }
+
+      .status-dot {
+        width: 9px;
+        height: 9px;
+        flex: 0 0 auto;
+        border-radius: 999px;
+        background: var(--green);
+      }
+
+      .status-dot.fallback {
+        background: var(--yellow);
+      }
+
+      .status-dot.stopped {
+        background: var(--red);
+      }
+
+      .history-range-total {
+        min-width: 0;
+        min-height: 42px;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        overflow: hidden;
+        color: var(--text);
+        font-size: 24px;
+        font-weight: 800;
+        line-height: 1;
+        text-align: right;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+
+      .history-chart-shell {
+        min-height: 360px;
+        display: grid;
+        grid-template-columns: 58px minmax(0, 1fr);
+        grid-template-rows: minmax(270px, 1fr) auto;
+        gap: 8px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 14px;
+        background: #fff;
+      }
+
+      .history-y-axis {
+        grid-column: 1;
+        grid-row: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        align-items: flex-end;
+        padding: 4px 0 28px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .history-chart {
+        grid-column: 2;
+        grid-row: 1;
+        min-width: 0;
+        min-height: 270px;
+        display: flex;
+        align-items: flex-end;
+        gap: 8px;
+        overflow: hidden;
+        border-left: 1px solid #edf1f6;
+        border-bottom: 1px solid #dce2ea;
+        padding: 22px 8px 0;
+      }
+
+      .history-bar-item {
+        min-width: 0;
+        height: 100%;
+        flex: 1 1 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 6px;
+      }
+
+      .history-bar-value {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .history-bar {
+        width: min(32px, 74%);
+        min-height: 2px;
+        border-radius: 6px 6px 0 0;
+        background: var(--blue);
+        cursor: pointer;
+        transition:
+          height 320ms ease,
+          background 150ms ease,
+          transform 80ms ease,
+          box-shadow 150ms ease;
+      }
+
+      .history-bar:hover {
+        background: #1f5fcf;
+        box-shadow: 0 0 0 3px rgba(45, 108, 223, 0.14);
+      }
+
+      .history-bar:active {
+        background: #194fae;
+        transform: translateY(1px);
+      }
+
+      .history-x-axis {
+        grid-column: 2;
+        grid-row: 2;
+        min-width: 0;
+        display: flex;
+        gap: 8px;
+        padding: 0 8px;
+      }
+
+      .history-x-label {
+        min-width: 0;
+        flex: 1 1 0;
+        overflow: hidden;
+        text-align: center;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .history-empty {
+        width: 100%;
+        margin: auto;
+        align-self: center;
+        text-align: center;
+        color: var(--muted);
+      }
+
+      .history-footer {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .user-usage-toolbar {
+        display: grid;
+        grid-template-columns: minmax(260px, 1fr) auto minmax(220px, 0.7fr);
+        gap: 12px;
+        align-items: center;
+      }
+
+      .user-usage-refresh {
+        min-height: 40px;
+        padding: 9px 16px;
+        white-space: nowrap;
+      }
+
+      .user-usage-window {
+        min-width: 0;
+        color: var(--muted);
+        font-size: 13px;
+        text-align: right;
+      }
+
+      .user-usage-chart-shell {
+        min-height: 380px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 14px;
+        background: #fff;
+      }
+
+      .user-usage-chart {
+        min-height: 330px;
+        display: grid;
+        gap: 12px;
+        align-content: start;
+      }
+
+      .user-usage-row {
+        display: grid;
+        grid-template-columns: max-content minmax(0, 1fr);
+        column-gap: 8px;
+        align-items: center;
+      }
+
+      .user-usage-label {
+        width: var(--user-usage-label-width, max-content);
+        max-width: 220px;
+        overflow: hidden;
+        color: var(--text);
+        font-size: 13px;
+        font-weight: 700;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .user-usage-bar-track {
+        min-width: 0;
+        height: 28px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .user-usage-bar {
+        height: 16px;
+        width: 0%;
+        border-radius: 8px;
+        background: var(--blue);
+        cursor: pointer;
+        transition:
+          width 320ms ease,
+          background 150ms ease,
+          transform 80ms ease,
+          box-shadow 150ms ease;
+      }
+
+      .user-usage-bar:hover {
+        background: #1f5fcf;
+        box-shadow: 0 0 0 3px rgba(45, 108, 223, 0.14);
+      }
+
+      .user-usage-bar:active {
+        background: #194fae;
+        transform: translateY(1px);
+      }
+
+      .user-usage-bar.over-limit {
+        background: var(--red);
+      }
+
+      .user-usage-bar.over-limit:hover {
+        background: #b91c1c;
+      }
+
+      .user-usage-value {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .user-usage-value.over-limit {
+        color: var(--red);
+      }
+
+      .dialog-modal {
+        width: min(760px, 100%);
+        max-height: min(640px, calc(100vh - 48px));
+      }
+
+      .dialog-overlay {
+        z-index: 45;
+      }
+
+      .dialog-content {
+        display: grid;
+        gap: 12px;
+        padding-top: 14px;
+      }
+
+      .dialog-user {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .dialog-table-wrap {
+        overflow: auto;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+      }
+
+      .dialog-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+      }
+
+      .dialog-table th,
+      .dialog-table td {
+        border-bottom: 1px solid #edf1f6;
+        padding: 10px 12px;
+        text-align: left;
+        vertical-align: middle;
+        font-size: 13px;
+      }
+
+      .dialog-table th {
+        background: #f8fafc;
+        color: var(--text);
+        font-weight: 800;
+        white-space: nowrap;
+      }
+
+      .dialog-table tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .dialog-text-cell {
+        width: 52%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .dialog-prompt-wrap {
+        min-width: 0;
+        max-width: 100%;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        vertical-align: middle;
+      }
+
+      .dialog-quote-tag {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        height: 20px;
+        border: 1px solid #cbd5e1;
+        border-radius: 7px;
+        background: #f1f5f9;
+        color: #475569;
+        padding: 0 6px;
+        font-size: 12px;
+        font-weight: 800;
+        line-height: 1;
+        white-space: nowrap;
+      }
+
+      .dialog-prompt-text {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .dialog-number-cell,
+      .dialog-time-cell {
+        width: 24%;
+        white-space: nowrap;
+      }
+
+      .dialog-sort-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        padding: 0;
+        cursor: pointer;
+        font-weight: 800;
+      }
+
+      .dialog-sort-button:hover {
+        color: var(--blue);
+      }
+
+      .dialog-sort-button:active {
+        color: #194fae;
+      }
+
+      .dialog-close-button {
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        font-size: 20px;
+        line-height: 1;
+      }
+
+      .history-tooltip {
+        position: fixed;
+        z-index: 60;
+        display: none;
+        padding: 9px 11px;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        background: #fff;
+        color: var(--text);
+        box-shadow: 0 12px 28px rgba(11, 18, 32, 0.18);
+        pointer-events: none;
+        white-space: nowrap;
+        width: max-content;
+      }
+
+      .history-tooltip.open {
+        display: grid;
+        gap: 4px;
+      }
+
+      .history-tooltip-line {
+        display: block;
+        overflow: visible;
+        color: var(--text);
+        font-size: 13px;
+        line-height: 1.25;
+        text-overflow: clip;
+        white-space: nowrap;
+      }
+
+      .history-tooltip-value {
+        font-weight: 800;
+      }
+
+      .switch {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .switch input {
+        width: 18px;
+        height: 18px;
+      }
+
+      .toast {
+        min-height: 20px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .toast.error {
+        color: var(--red);
+      }
+
+      .toast.warning {
+        color: var(--yellow-dark);
+      }
+
+      @media (max-width: 860px) {
+        .app {
+          padding: 14px;
+        }
+
+        .layout,
+        .config-row,
+        .history-toolbar,
+        .user-usage-toolbar,
+        .user-usage-row {
+          grid-template-columns: 1fr;
+        }
+
+        .user-usage-window {
+          text-align: left;
+        }
+
+        .user-usage-label {
+          width: auto;
+          max-width: none;
+        }
+
+        .modal {
+          max-height: calc(100vh - 28px);
+        }
+
+        .history-chart-shell {
+          min-height: 320px;
+          grid-template-columns: 46px minmax(0, 1fr);
+          padding: 12px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <section class="layout">
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <h1 class="panel-title">用量统计</h1>
+              <p id="windowText" class="panel-subtitle"></p>
+            </div>
+            <button id="refreshBtn" class="action-button" type="button">刷新</button>
+          </div>
+          <div id="usageList" class="usage-list"></div>
+        </section>
+
+        <aside class="panel">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">插件功能</h2>
+            </div>
+          </div>
+          <div class="feature-body">
+            <button id="openConfigBtn" class="config-button" type="button">
+              插件基础配置 ...
+            </button>
+            <button id="openStrategyBtn" class="strategy-button" type="button">
+              用量超限策略配置
+            </button>
+            <button id="openHistoryBtn" class="strategy-button" type="button">
+              历史 token 用量统计
+            </button>
+            <button id="openUserUsageBtn" class="strategy-button" type="button">
+              今日用户 token 用量统计
+            </button>
+            <div id="statusLine" class="status-line"></div>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <div id="overlay" class="overlay" role="dialog" aria-modal="true">
+      <section class="modal">
+        <div class="modal-topbar">
+          <div class="modal-title">插件配置</div>
+          <div class="modal-actions">
+            <button id="saveBtn" class="action-button primary" type="button">
+              保存
+            </button>
+            <button id="cancelBtn" class="action-button" type="button">取消</button>
+          </div>
+        </div>
+        <div class="modal-content">
+          <div id="configForm"></div>
+          <div id="toast" class="toast"></div>
+        </div>
+      </section>
+    </div>
+
+    <div id="strategyOverlay" class="overlay" role="dialog" aria-modal="true">
+      <section class="modal">
+        <div class="modal-topbar">
+          <div class="modal-title">用量超限时的措施</div>
+          <div class="modal-actions">
+            <button id="saveStrategyBtn" class="action-button primary" type="button">
+              保存
+            </button>
+            <button id="cancelStrategyBtn" class="action-button" type="button">取消</button>
+          </div>
+        </div>
+        <div class="modal-content">
+          <div id="strategyForm" class="strategy-form"></div>
+          <div id="strategyToast" class="toast"></div>
+        </div>
+      </section>
+    </div>
+
+    <div id="historyOverlay" class="overlay" role="dialog" aria-modal="true">
+      <section class="modal history-modal">
+        <div class="modal-topbar">
+          <div class="modal-title">历史 token 用量统计</div>
+          <div class="modal-actions">
+            <button id="cancelHistoryBtn" class="action-button" type="button">关闭</button>
+          </div>
+        </div>
+        <div class="modal-content history-content">
+          <div class="history-toolbar">
+            <div id="groupSelect" class="custom-select">
+              <button id="groupSelectTrigger" class="select-trigger" type="button">
+                <span id="groupSelectLabel" class="select-label">选择群聊 ...</span>
+                <span class="select-arrow">▼</span>
+              </button>
+              <div id="groupSelectMenu" class="select-menu"></div>
+            </div>
+            <div id="rangeSelect" class="custom-select">
+              <button id="rangeSelectTrigger" class="select-trigger" type="button">
+                <span id="rangeSelectLabel" class="select-label">近 24 小时</span>
+                <span class="select-arrow">▼</span>
+              </button>
+              <div id="rangeSelectMenu" class="select-menu"></div>
+            </div>
+            <div
+              id="historyRangeTotal"
+              class="history-range-total"
+              aria-live="polite"
+            ></div>
+          </div>
+          <div class="history-chart-shell">
+            <div id="historyYAxis" class="history-y-axis"></div>
+            <div id="historyChart" class="history-chart"></div>
+            <div id="historyXAxis" class="history-x-axis"></div>
+          </div>
+          <div id="historyFooter" class="history-footer"></div>
+        </div>
+      </section>
+    </div>
+
+    <div id="userUsageOverlay" class="overlay" role="dialog" aria-modal="true">
+      <section class="modal history-modal">
+        <div class="modal-topbar">
+          <div class="modal-title">今日用户 token 用量统计</div>
+          <div class="modal-actions">
+            <button id="cancelUserUsageBtn" class="action-button" type="button">关闭</button>
+          </div>
+        </div>
+        <div class="modal-content history-content">
+          <div class="user-usage-toolbar">
+            <div id="userGroupSelect" class="custom-select">
+              <button id="userGroupSelectTrigger" class="select-trigger" type="button">
+                <span id="userGroupSelectLabel" class="select-label">选择群聊 ...</span>
+                <span class="select-arrow">▼</span>
+              </button>
+              <div id="userGroupSelectMenu" class="select-menu"></div>
+            </div>
+            <button
+              id="refreshUserUsageBtn"
+              class="action-button user-usage-refresh"
+              type="button"
+            >
+              刷新
+            </button>
+            <div id="userUsageWindow" class="user-usage-window"></div>
+          </div>
+          <div class="user-usage-chart-shell">
+            <div id="userUsageChart" class="user-usage-chart">
+              <div class="history-empty">请选择群聊查看今日用户 token 用量</div>
+            </div>
+          </div>
+          <div id="userUsageFooter" class="history-footer"></div>
+        </div>
+      </section>
+    </div>
+
+    <div
+      id="userDialogOverlay"
+      class="overlay dialog-overlay"
+      role="dialog"
+      aria-modal="true"
+    >
+      <section class="modal dialog-modal">
+        <div class="modal-topbar">
+          <div class="modal-title">对话数据</div>
+          <div class="modal-actions">
+            <button
+              id="closeUserDialogBtn"
+              class="action-button dialog-close-button"
+              type="button"
+              aria-label="关闭"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+        <div class="modal-content dialog-content">
+          <div id="userDialogTarget" class="dialog-user"></div>
+          <div class="dialog-table-wrap">
+            <table class="dialog-table">
+              <thead>
+                <tr>
+                  <th class="dialog-text-cell">对话</th>
+                  <th class="dialog-number-cell">
+                    <button
+                      id="sortUserDialogTokensBtn"
+                      class="dialog-sort-button"
+                      type="button"
+                    >
+                      用量<span id="sortUserDialogTokensIcon"></span>
+                    </button>
+                  </th>
+                  <th class="dialog-time-cell">
+                    <button
+                      id="sortUserDialogTimeBtn"
+                      class="dialog-sort-button"
+                      type="button"
+                    >
+                      时间<span id="sortUserDialogTimeIcon"></span>
+                    </button>
+                  </th>
+                </tr>
+              </thead>
+              <tbody id="userDialogTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div id="remarkOverlay" class="overlay compact" role="dialog" aria-modal="true">
+      <section class="modal">
+        <div class="modal-topbar">
+          <div class="modal-title">群聊备注</div>
+          <div class="modal-actions">
+            <button id="saveRemarkBtn" class="action-button primary" type="button">
+              保存
+            </button>
+            <button id="cancelRemarkBtn" class="action-button" type="button">取消</button>
+          </div>
+        </div>
+        <div class="modal-content">
+          <div class="remark-form">
+            <div id="remarkTarget" class="remark-target"></div>
+            <input
+              id="remarkInput"
+              class="field"
+              type="text"
+              maxlength="64"
+              placeholder="输入备注名"
+            />
+            <div id="remarkToast" class="toast"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div id="groupSettingsOverlay" class="overlay compact" role="dialog" aria-modal="true">
+      <section class="modal">
+        <div class="modal-topbar">
+          <div class="modal-title">群聊个性化配置</div>
+          <div class="modal-actions">
+            <button id="saveGroupSettingsBtn" class="action-button primary" type="button">
+              保存
+            </button>
+            <button id="cancelGroupSettingsBtn" class="action-button" type="button">
+              取消
+            </button>
+          </div>
+        </div>
+        <div class="modal-content">
+          <div class="group-settings-form">
+            <div id="groupSettingsTarget" class="group-settings-target"></div>
+            <div>
+              <div class="config-name">单独配置本群每日用量上限</div>
+              <div class="group-limit-control">
+                <input
+                  id="groupLimitInput"
+                  class="field"
+                  type="number"
+                  min="0"
+                  step="1"
+                />
+                <button id="resetGroupLimitBtn" class="action-button" type="button" disabled>
+                  重置
+                </button>
+              </div>
+            </div>
+            <div id="groupSettingsHint" class="group-settings-hint"></div>
+            <div class="group-settings-section">
+              <div class="group-settings-section-title">本群 token 节约策略</div>
+              <label class="switch group-settings-checkbox">
+                <input id="groupOnlyAtBotInput" type="checkbox" />
+                <span>仅通过 @bot 触发 LLM 回复</span>
+              </label>
+              <label class="switch group-settings-checkbox">
+                <input id="groupContextLimitInput" type="checkbox" />
+                <span>
+                  最大上下文窗口设置为额度的 0.5%
+                  <span id="groupContextLimitValue" class="group-settings-inline-note"></span>
+                </span>
+              </label>
+              <label class="switch group-settings-checkbox">
+                <input id="groupPromptCacheInput" type="checkbox" />
+                <span>
+                  通过稳定缓存键提升缓存命中率
+                  <span class="group-settings-inline-note cache-strategy-tag">GPT 专用</span>
+                </span>
+              </label>
+              <label class="switch group-settings-checkbox">
+                <input id="groupDeepSeekCacheInput" type="checkbox" />
+                <span>
+                  通过稳定前缀提升缓存命中率
+                  <span class="group-settings-inline-note cache-strategy-tag">DeepSeek 专用</span>
+                </span>
+              </label>
+            </div>
+            <div id="groupSettingsToast" class="toast"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div id="historyTooltip" class="history-tooltip" role="status" aria-live="polite">
+      <span id="historyTooltipLabel" class="history-tooltip-line"></span>
+      <span
+        id="historyTooltipValue"
+        class="history-tooltip-line history-tooltip-value"
+      ></span>
+    </div>
+
+    <script>
+      const api = window.AstrBotPluginPage;
+      const state = {
+        config: {},
+        draft: {},
+        strategyDraft: {},
+        schema: {},
+        currentRemarkGroupId: "",
+        currentSettingsGroupId: "",
+        currentSettingsInitialLimit: null,
+        currentSettingsHasCustomLimit: false,
+        currentSettingsInitialOnlyAtBot: false,
+        currentSettingsInitialContextLimit05: false,
+        currentSettingsInitialPromptCache: false,
+        currentSettingsInitialDeepSeekCache: false,
+        currentSettingsCacheWarningTouched: false,
+        history: {
+          groups: [],
+          selectedGroupId: "",
+          range: "24h",
+          bars: [],
+          rangeTotalDisplay: "",
+          rangeTotalTokens: 0,
+          syncedAt: "",
+        },
+        userUsage: {
+          groups: [],
+          selectedGroupId: "",
+          users: [],
+          window: null,
+          syncedAt: "",
+          dialogUser: null,
+          dialogSortKey: "time",
+          dialogSortDirection: "desc",
+        },
+      };
+
+      const usageList = document.getElementById("usageList");
+      const windowText = document.getElementById("windowText");
+      const statusLine = document.getElementById("statusLine");
+      const overlay = document.getElementById("overlay");
+      const strategyOverlay = document.getElementById("strategyOverlay");
+      const historyOverlay = document.getElementById("historyOverlay");
+      const userUsageOverlay = document.getElementById("userUsageOverlay");
+      const userDialogOverlay = document.getElementById("userDialogOverlay");
+      const remarkOverlay = document.getElementById("remarkOverlay");
+      const groupSettingsOverlay = document.getElementById("groupSettingsOverlay");
+      const configForm = document.getElementById("configForm");
+      const strategyForm = document.getElementById("strategyForm");
+      const toast = document.getElementById("toast");
+      const strategyToast = document.getElementById("strategyToast");
+      const groupSelect = document.getElementById("groupSelect");
+      const groupSelectTrigger = document.getElementById("groupSelectTrigger");
+      const groupSelectLabel = document.getElementById("groupSelectLabel");
+      const groupSelectMenu = document.getElementById("groupSelectMenu");
+      const rangeSelect = document.getElementById("rangeSelect");
+      const rangeSelectTrigger = document.getElementById("rangeSelectTrigger");
+      const rangeSelectLabel = document.getElementById("rangeSelectLabel");
+      const rangeSelectMenu = document.getElementById("rangeSelectMenu");
+      const historyRangeTotal = document.getElementById("historyRangeTotal");
+      const historyYAxis = document.getElementById("historyYAxis");
+      const historyChart = document.getElementById("historyChart");
+      const historyXAxis = document.getElementById("historyXAxis");
+      const historyFooter = document.getElementById("historyFooter");
+      const userGroupSelect = document.getElementById("userGroupSelect");
+      const userGroupSelectTrigger = document.getElementById("userGroupSelectTrigger");
+      const userGroupSelectLabel = document.getElementById("userGroupSelectLabel");
+      const userGroupSelectMenu = document.getElementById("userGroupSelectMenu");
+      const refreshUserUsageBtn = document.getElementById("refreshUserUsageBtn");
+      const userUsageWindow = document.getElementById("userUsageWindow");
+      const userUsageChart = document.getElementById("userUsageChart");
+      const userUsageFooter = document.getElementById("userUsageFooter");
+      const userDialogTarget = document.getElementById("userDialogTarget");
+      const userDialogTableBody = document.getElementById("userDialogTableBody");
+      const sortUserDialogTokensBtn = document.getElementById("sortUserDialogTokensBtn");
+      const sortUserDialogTimeBtn = document.getElementById("sortUserDialogTimeBtn");
+      const sortUserDialogTokensIcon = document.getElementById("sortUserDialogTokensIcon");
+      const sortUserDialogTimeIcon = document.getElementById("sortUserDialogTimeIcon");
+      const remarkInput = document.getElementById("remarkInput");
+      const remarkTarget = document.getElementById("remarkTarget");
+      const remarkToast = document.getElementById("remarkToast");
+      const groupSettingsTarget = document.getElementById("groupSettingsTarget");
+      const groupLimitInput = document.getElementById("groupLimitInput");
+      const resetGroupLimitBtn = document.getElementById("resetGroupLimitBtn");
+      const groupOnlyAtBotInput = document.getElementById("groupOnlyAtBotInput");
+      const groupContextLimitInput = document.getElementById("groupContextLimitInput");
+      const groupPromptCacheInput = document.getElementById("groupPromptCacheInput");
+      const groupDeepSeekCacheInput = document.getElementById("groupDeepSeekCacheInput");
+      const groupContextLimitValue = document.getElementById("groupContextLimitValue");
+      const groupSettingsHint = document.getElementById("groupSettingsHint");
+      const groupSettingsToast = document.getElementById("groupSettingsToast");
+      const historyTooltip = document.getElementById("historyTooltip");
+      const historyTooltipLabel = document.getElementById("historyTooltipLabel");
+      const historyTooltipValue = document.getElementById("historyTooltipValue");
+      let historyResizeFrame = 0;
+
+      function setToast(message, isError = false) {
+        toast.textContent = message || "";
+        toast.classList.toggle("error", Boolean(isError));
+      }
+
+      function setStrategyToast(message, isError = false) {
+        strategyToast.textContent = message || "";
+        strategyToast.classList.toggle("error", Boolean(isError));
+      }
+
+      function setRemarkToast(message, isError = false) {
+        remarkToast.textContent = message || "";
+        remarkToast.classList.toggle("error", Boolean(isError));
+      }
+
+      function setGroupSettingsToast(message, isError = false, isWarning = false) {
+        groupSettingsToast.textContent = message || "";
+        groupSettingsToast.classList.toggle("error", Boolean(isError));
+        groupSettingsToast.classList.toggle("warning", Boolean(isWarning));
+        groupSettingsToast.dataset.priority = message && !isWarning ? "manual" : "";
+      }
+
+      function setGroupSettingsResetEnabled(enabled) {
+        state.currentSettingsHasCustomLimit = Boolean(enabled);
+        resetGroupLimitBtn.disabled = !state.currentSettingsHasCustomLimit;
+      }
+
+      function groupContextLimitDisplay(limitTokens) {
+        const tokens = groupContextLimitTokens(limitTokens);
+        if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(2)}M`;
+        return `${Math.max(1, Math.round(tokens / 1000))}K`;
+      }
+
+      function groupContextLimitTokens(limitTokens) {
+        return Math.max(1, Math.floor(Number(limitTokens || 0) * 0.005));
+      }
+
+      function currentGroupContextLimitTokens() {
+        const value = Number.parseInt(groupLimitInput.value || "0", 10);
+        const limitTokens = Number.isNaN(value) ? 0 : value;
+        return groupContextLimitTokens(limitTokens);
+      }
+
+      function groupContextLimitWarningMessage() {
+        if (!groupContextLimitInput.checked) return "";
+        const tokens = currentGroupContextLimitTokens();
+        if (tokens < 15000) {
+          return "警告：LLM 上下文窗口过短，可能显著降低 bot 记忆能力。";
+        }
+        if (tokens >= 200000) {
+          return "警告：LLM 上下文窗口较长，可能显著增加 token 用量。";
+        }
+        return "";
+      }
+
+      function groupCacheStrategyWarningMessage() {
+        if (!state.currentSettingsCacheWarningTouched) return "";
+        if (!groupPromptCacheInput.checked && !groupDeepSeekCacheInput.checked) return "";
+        return "警告：请确认没有同时启用会修改 LLM 请求体的其他插件。";
+      }
+
+      function groupSettingsWarningMessage() {
+        return groupCacheStrategyWarningMessage() || groupContextLimitWarningMessage();
+      }
+
+      function updateGroupContextLimitWarning() {
+        if (groupSettingsToast.dataset.priority === "manual") return;
+        const message = groupSettingsWarningMessage();
+        setGroupSettingsToast(message, false, Boolean(message));
+      }
+
+      function updateGroupCacheStrategyWarning() {
+        state.currentSettingsCacheWarningTouched = true;
+        updateGroupContextLimitWarning();
+      }
+
+      function clearGroupSettingsToast() {
+        groupSettingsToast.dataset.priority = "";
+        updateGroupContextLimitWarning();
+      }
+
+      function updateGroupContextLimitValue() {
+        const value = Number.parseInt(groupLimitInput.value || "0", 10);
+        const limitTokens = Number.isNaN(value) ? 0 : value;
+        groupContextLimitValue.textContent = `(${groupContextLimitDisplay(limitTokens)})`;
+        updateGroupContextLimitWarning();
+      }
+
+      function createPencilIcon() {
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("viewBox", "0 0 24 24");
+        svg.setAttribute("fill", "none");
+        svg.setAttribute("stroke", "currentColor");
+        svg.setAttribute("stroke-linecap", "round");
+        svg.setAttribute("stroke-linejoin", "round");
+
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute(
+          "d",
+          "M12 20h9 M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z",
+        );
+        svg.append(path);
+        return svg;
+      }
+
+      function createGearIcon() {
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("viewBox", "0 0 24 24");
+        svg.setAttribute("fill", "none");
+        svg.setAttribute("stroke", "currentColor");
+        svg.setAttribute("stroke-linecap", "round");
+        svg.setAttribute("stroke-linejoin", "round");
+
+        const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        circle.setAttribute("cx", "12");
+        circle.setAttribute("cy", "12");
+        circle.setAttribute("r", "3");
+        svg.append(circle);
+
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute(
+          "d",
+          "M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.1a2 2 0 1 1 0 4H21a1.7 1.7 0 0 0-1.6 1z",
+        );
+        svg.append(path);
+        return svg;
+      }
+
+      function formatDate(value) {
+        if (!value) return "";
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return value;
+        const pad = (num) => String(num).padStart(2, "0");
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+      }
+
+      function normalizeListText(value) {
+        if (Array.isArray(value)) return value.join("\n");
+        return normalizeTextareaText(value);
+      }
+
+      function normalizeTextareaText(value) {
+        return String(value || "").replace(/\\n/g, "\n");
+      }
+
+      function parseListText(value) {
+        return String(value || "")
+          .split(/[\s,;，；]+/)
+          .map((item) => item.trim())
+          .filter(Boolean);
+      }
+
+      function inputTypeFor(meta) {
+        if (meta.type === "int" || meta.type === "float") return "number";
+        return "text";
+      }
+
+      function optionLabel(meta, option, index) {
+        if (Array.isArray(meta.option_labels) && meta.option_labels[index]) {
+          return meta.option_labels[index];
+        }
+        return option;
+      }
+
+      function renderConfigControl(key, meta, draft, onChange) {
+        const control = document.createElement("div");
+        if (meta.options) {
+          const select = document.createElement("select");
+          select.className = "field";
+          const originalOptions = Array.isArray(meta.options) ? meta.options : [];
+          const options = [...originalOptions];
+          const currentValue = draft[key] ?? meta.default ?? "";
+          if (currentValue && !options.includes(currentValue)) {
+            options.unshift(currentValue);
+          }
+          if (!options.length) {
+            const item = document.createElement("option");
+            item.value = "";
+            item.textContent = "暂无可用选项";
+            select.append(item);
+          }
+          options.forEach((option, index) => {
+            const item = document.createElement("option");
+            const originalIndex = originalOptions.indexOf(option);
+            item.value = option;
+            item.textContent =
+              originalIndex >= 0 ? optionLabel(meta, option, originalIndex) : option;
+            select.append(item);
+          });
+          select.value = currentValue;
+          select.addEventListener("change", () => {
+            draft[key] = select.value;
+            if (onChange) onChange(key, select.value);
+          });
+          control.append(select);
+        } else if (meta.type === "bool") {
+          const label = document.createElement("label");
+          label.className = "switch";
+          const input = document.createElement("input");
+          input.type = "checkbox";
+          input.checked = Boolean(draft[key]);
+          input.addEventListener("change", () => {
+            draft[key] = input.checked;
+            if (onChange) onChange(key, input.checked);
+          });
+          const text = document.createElement("span");
+          text.textContent = input.checked ? "启用" : "关闭";
+          input.addEventListener("change", () => {
+            text.textContent = input.checked ? "启用" : "关闭";
+          });
+          label.append(input, text);
+          control.append(label);
+        } else if (meta.type === "list") {
+          const textarea = document.createElement("textarea");
+          textarea.className = "field";
+          textarea.value = normalizeListText(draft[key]);
+          textarea.addEventListener("input", () => {
+            draft[key] = parseListText(textarea.value);
+            if (onChange) onChange(key, draft[key]);
+          });
+          control.append(textarea);
+        } else if (meta.type === "text") {
+          const textarea = document.createElement("textarea");
+          textarea.className = "field";
+          textarea.value = normalizeTextareaText(draft[key]);
+          textarea.addEventListener("input", () => {
+            draft[key] = textarea.value;
+            if (onChange) onChange(key, textarea.value);
+          });
+          control.append(textarea);
+        } else {
+          const input = document.createElement("input");
+          input.className = "field";
+          input.type = inputTypeFor(meta);
+          input.value = draft[key] ?? "";
+          if (meta.type === "int") input.step = "1";
+          input.addEventListener("input", () => {
+            draft[key] =
+              meta.type === "int" ? Number.parseInt(input.value || "0", 10) : input.value;
+            if (onChange) onChange(key, draft[key]);
+          });
+          control.append(input);
+        }
+        return control;
+      }
+
+      function appendConfigRow(container, key, meta, draft, onChange) {
+          if (!meta) return;
+          const row = document.createElement("div");
+          row.className = "config-row";
+
+          const info = document.createElement("div");
+          const name = document.createElement("div");
+          name.className = "config-name";
+          name.textContent = meta.description || key;
+          const hint = document.createElement("div");
+          hint.className = "config-hint";
+          hint.textContent = meta.hint || "";
+          info.append(name, hint);
+
+          const control = renderConfigControl(key, meta, draft, onChange);
+
+          row.append(info, control);
+          container.append(row);
+      }
+
+      function renderConfigForm() {
+        configForm.innerHTML = "";
+        Object.entries(state.schema).forEach(([key, meta]) => {
+          if (key === "over_limit_policy") return;
+          if (meta.type === "object") return;
+          appendConfigRow(configForm, key, meta, state.draft);
+        });
+      }
+
+      function renderStrategyForm() {
+        strategyForm.innerHTML = "";
+        const policyMeta = state.schema.over_limit_policy || {};
+        const items = policyMeta.items || {};
+        appendConfigRow(strategyForm, "action", items.action, state.strategyDraft, () => {
+          renderStrategyForm();
+        });
+        appendConfigRow(
+          strategyForm,
+          "block_wake_words_after_limit",
+          items.block_wake_words_after_limit,
+          state.strategyDraft,
+        );
+        if (state.strategyDraft.action === "fallback_provider") {
+          appendConfigRow(
+            strategyForm,
+            "fallback_provider_id",
+            items.fallback_provider_id,
+            state.strategyDraft,
+          );
+          appendConfigRow(
+            strategyForm,
+            "fallback_token_limit",
+            items.fallback_token_limit,
+            state.strategyDraft,
+          );
+        }
+      }
+
+      function renderUsage(payload) {
+        const groups = payload.groups || [];
+        windowText.textContent = payload.window
+          ? `${formatDate(payload.window.start)} - ${formatDate(payload.window.end)}`
+          : "";
+        statusLine.textContent = payload.enabled
+          ? "当前限流插件已启用"
+          : "当前限流插件未启用";
+
+        usageList.innerHTML = "";
+        if (!groups.length) {
+          const empty = document.createElement("div");
+          empty.className = "empty";
+          empty.textContent = "尚未配置需要限流的 QQ 群聊";
+          usageList.append(empty);
+          return;
+        }
+
+        groups.forEach((group) => {
+          const row = document.createElement("div");
+          row.className = "usage-row";
+
+          const meta = document.createElement("div");
+          meta.className = "usage-meta";
+
+          const groupInfo = document.createElement("div");
+          groupInfo.className = "group-info";
+
+          const groupText = document.createElement("div");
+          groupText.className = "group-text";
+
+          const groupId = document.createElement("div");
+          groupId.className = "group-id";
+          groupId.textContent = group.group_id;
+
+          groupText.append(groupId);
+
+          if (group.remark) {
+            const groupRemark = document.createElement("div");
+            groupRemark.className = "group-remark";
+            groupRemark.textContent = `（${group.remark}）`;
+            groupText.append(groupRemark);
+          }
+
+          const remarkButton = document.createElement("button");
+          remarkButton.className = "icon-button";
+          remarkButton.type = "button";
+          remarkButton.title = "编辑备注";
+          remarkButton.setAttribute("aria-label", `编辑 ${group.group_id} 的备注`);
+          remarkButton.append(createPencilIcon());
+          remarkButton.addEventListener("click", () => {
+            openRemark(group.group_id, group.remark || "");
+          });
+
+          const settingsButton = document.createElement("button");
+          settingsButton.className = "icon-button";
+          settingsButton.type = "button";
+          settingsButton.title = "群聊个性化配置";
+          settingsButton.setAttribute(
+            "aria-label",
+            `配置 ${group.group_id} 的每日用量上限`,
+          );
+          settingsButton.append(createGearIcon());
+          settingsButton.addEventListener("click", () => {
+            openGroupSettings(group);
+          });
+
+          groupInfo.append(groupText, remarkButton, settingsButton);
+
+          const usageSide = document.createElement("div");
+          usageSide.className = "usage-side";
+          if (group.stopped) {
+            const stopTag = document.createElement("div");
+            stopTag.className = "stop-tag";
+            stopTag.textContent = "停止响应";
+            usageSide.append(stopTag);
+          } else if (group.using_fallback) {
+            const fallbackTag = document.createElement("div");
+            fallbackTag.className = "fallback-tag";
+            fallbackTag.textContent = "回退模型";
+            usageSide.append(fallbackTag);
+          }
+
+          const value = document.createElement("div");
+          value.className = "usage-value";
+          if (group.stopped) {
+            value.classList.add("stopped");
+          } else if (group.using_fallback) {
+            value.classList.add("fallback");
+          }
+          value.textContent = `${group.used_display}/${group.limit_display}`;
+          usageSide.append(value);
+          meta.append(groupInfo, usageSide);
+
+          const track = document.createElement("div");
+          track.className = "progress-track";
+          const fill = document.createElement("div");
+          fill.className = `progress-fill${group.stopped ? " stopped" : ""}${!group.stopped && group.using_fallback ? " fallback" : ""}`;
+          fill.style.width = `${Math.max(0, Math.min(100, group.percent || 0))}%`;
+          track.append(fill);
+
+          row.append(meta, track);
+          usageList.append(row);
+        });
+      }
+
+      const historyRangeOptions = [
+        { value: "24h", label: "近 24 小时" },
+        { value: "7d", label: "近 7 天" },
+        { value: "30d", label: "近一个月" },
+        { value: "all", label: "历史总和" },
+      ];
+
+      function historyRangeLabel(value) {
+        return (
+          historyRangeOptions.find((item) => item.value === value)?.label ||
+          historyRangeOptions[0].label
+        );
+      }
+
+      function closeCustomSelects(except = null) {
+        [groupSelect, rangeSelect, userGroupSelect].forEach((item) => {
+          if (item && item !== except) item.classList.remove("open");
+        });
+      }
+
+      function toggleCustomSelect(select) {
+        const willOpen = !select.classList.contains("open");
+        closeCustomSelects(select);
+        select.classList.toggle("open", willOpen);
+      }
+
+      function statusDotClass(status) {
+        if (status === "stopped") return "status-dot stopped";
+        if (status === "fallback") return "status-dot fallback";
+        return "status-dot";
+      }
+
+      function selectedHistoryGroup() {
+        return state.history.groups.find(
+          (group) => group.group_id === state.history.selectedGroupId,
+        );
+      }
+
+      function selectedUserUsageGroup() {
+        return state.userUsage.groups.find(
+          (group) => group.group_id === state.userUsage.selectedGroupId,
+        );
+      }
+
+      async function reloadHistory() {
+        hideHistoryTooltip();
+        historyChart.innerHTML = '<div class="history-empty">加载中...</div>';
+        historyXAxis.innerHTML = "";
+        historyYAxis.innerHTML = "";
+        historyFooter.textContent = "";
+        state.history.rangeTotalTokens = 0;
+        state.history.rangeTotalDisplay = "";
+        renderHistoryTotal();
+        try {
+          await loadHistory();
+        } catch (error) {
+          historyChart.innerHTML = `<div class="history-empty">${
+            error.message || error
+          }</div>`;
+        }
+      }
+
+      function renderHistoryControls() {
+        const selectedGroup = selectedHistoryGroup();
+        groupSelectLabel.textContent = selectedGroup
+          ? `${selectedGroup.group_id}${selectedGroup.remark ? `（${selectedGroup.remark}）` : ""}`
+          : "选择群聊 ...";
+        rangeSelectLabel.textContent = historyRangeLabel(state.history.range);
+
+        groupSelectMenu.innerHTML = "";
+        const allOption = document.createElement("button");
+        allOption.className = `select-option${state.history.selectedGroupId ? "" : " selected"}`;
+        allOption.type = "button";
+        allOption.textContent = "选择群聊 ...";
+        allOption.addEventListener("click", async () => {
+          state.history.selectedGroupId = "";
+          closeCustomSelects();
+          await reloadHistory();
+        });
+        groupSelectMenu.append(allOption);
+
+        state.history.groups.forEach((group) => {
+          const option = document.createElement("button");
+          option.className = `select-option${
+            group.group_id === state.history.selectedGroupId ? " selected" : ""
+          }`;
+          option.type = "button";
+
+          const content = document.createElement("span");
+          content.className = "select-option-main";
+
+          const id = document.createElement("span");
+          id.className = "select-option-id";
+          id.textContent = `${group.group_id}${group.remark ? `（${group.remark}）` : ""}`;
+
+          const usageWrap = document.createElement("span");
+          usageWrap.className = "select-option-usage-wrap";
+
+          const dot = document.createElement("span");
+          dot.className = statusDotClass(group.status);
+
+          const usage = document.createElement("span");
+          usage.className = "select-option-usage";
+          usage.textContent = group.daily_display || "0";
+
+          usageWrap.append(dot, usage);
+          content.append(id, usageWrap);
+          option.append(content);
+          option.addEventListener("click", async () => {
+            state.history.selectedGroupId = group.group_id;
+            closeCustomSelects();
+            await reloadHistory();
+          });
+          groupSelectMenu.append(option);
+        });
+
+        rangeSelectMenu.innerHTML = "";
+        historyRangeOptions.forEach((item) => {
+          const option = document.createElement("button");
+          option.className = `select-option${
+            item.value === state.history.range ? " selected" : ""
+          }`;
+          option.type = "button";
+          option.textContent = item.label;
+          option.addEventListener("click", async () => {
+            state.history.range = item.value;
+            closeCustomSelects();
+            await reloadHistory();
+          });
+          rangeSelectMenu.append(option);
+        });
+      }
+
+      function renderUserUsageControls() {
+        const selectedGroup = selectedUserUsageGroup();
+        userGroupSelectLabel.textContent = selectedGroup
+          ? `${selectedGroup.group_id}${selectedGroup.remark ? `（${selectedGroup.remark}）` : ""}`
+          : "选择群聊 ...";
+
+        userGroupSelectMenu.innerHTML = "";
+        const placeholder = document.createElement("button");
+        placeholder.className = `select-option${
+          state.userUsage.selectedGroupId ? "" : " selected"
+        }`;
+        placeholder.type = "button";
+        placeholder.textContent = "选择群聊 ...";
+        placeholder.addEventListener("click", async () => {
+          state.userUsage.selectedGroupId = "";
+          closeCustomSelects();
+          await reloadUserUsage();
+        });
+        userGroupSelectMenu.append(placeholder);
+
+        state.userUsage.groups.forEach((group) => {
+          const option = document.createElement("button");
+          option.className = `select-option${
+            group.group_id === state.userUsage.selectedGroupId ? " selected" : ""
+          }`;
+          option.type = "button";
+
+          const content = document.createElement("span");
+          content.className = "select-option-main";
+
+          const id = document.createElement("span");
+          id.className = "select-option-id";
+          id.textContent = `${group.group_id}${group.remark ? `（${group.remark}）` : ""}`;
+
+          const usageWrap = document.createElement("span");
+          usageWrap.className = "select-option-usage-wrap";
+
+          const dot = document.createElement("span");
+          dot.className = statusDotClass(group.status);
+
+          const usage = document.createElement("span");
+          usage.className = "select-option-usage";
+          usage.textContent = group.daily_display || "0";
+
+          usageWrap.append(dot, usage);
+          content.append(id, usageWrap);
+          option.append(content);
+          option.addEventListener("click", async () => {
+            state.userUsage.selectedGroupId = group.group_id;
+            closeCustomSelects();
+            await reloadUserUsage();
+          });
+          userGroupSelectMenu.append(option);
+        });
+      }
+
+      function renderUserUsageWindow() {
+        const windowInfo = state.userUsage.window;
+        userUsageWindow.textContent = windowInfo
+          ? `${formatDate(windowInfo.start)} - ${formatDate(windowInfo.end)}`
+          : "";
+      }
+
+      function renderUserUsageChart() {
+        userUsageChart.innerHTML = "";
+        userUsageChart.style.removeProperty("--user-usage-label-width");
+        if (!state.userUsage.selectedGroupId) {
+          const empty = document.createElement("div");
+          empty.className = "history-empty";
+          empty.textContent = "请选择群聊查看今日用户 token 用量";
+          userUsageChart.append(empty);
+          userUsageFooter.textContent = "";
+          return;
+        }
+
+        const users = state.userUsage.users || [];
+        if (!users.length) {
+          const empty = document.createElement("div");
+          empty.className = "history-empty";
+          empty.textContent = "当前统计周期内暂无用户 token 用量";
+          userUsageChart.append(empty);
+          userUsageFooter.textContent = state.userUsage.syncedAt
+            ? `最后同步：${formatDate(state.userUsage.syncedAt)}`
+            : "";
+          return;
+        }
+
+        const maxValue = Math.max(...users.map((user) => Number(user.tokens || 0)), 1);
+        const labelWidth = measureUserUsageLabelWidth(users);
+        if (labelWidth > 0) {
+          userUsageChart.style.setProperty(
+            "--user-usage-label-width",
+            `${Math.min(labelWidth, 220)}px`,
+          );
+        }
+        users.forEach((user) => {
+          const row = document.createElement("div");
+          row.className = "user-usage-row";
+
+          const label = document.createElement("div");
+          label.className = "user-usage-label";
+          label.textContent = user.label || user.user_id || "";
+          label.title = user.user_id
+            ? `${label.textContent}（${user.user_id}）`
+            : label.textContent;
+
+          const track = document.createElement("div");
+          track.className = "user-usage-bar-track";
+          track.title = "点击查看对话数据";
+
+          const bar = document.createElement("div");
+          bar.className = "user-usage-bar";
+          bar.classList.toggle("over-limit", Boolean(user.over_user_limit));
+          bar.style.width = "0%";
+
+          const value = document.createElement("div");
+          value.className = "user-usage-value";
+          value.classList.toggle("over-limit", Boolean(user.over_user_limit));
+          value.textContent = user.display || formatTokenNumber(user.tokens || 0);
+
+          track.append(bar, value);
+          track.addEventListener("click", () => {
+            openUserDialog(user);
+          });
+          row.append(label, track);
+          userUsageChart.append(row);
+
+          window.requestAnimationFrame(() => {
+            const width = Math.max(
+              2,
+              Math.round((Number(user.tokens || 0) / maxValue) * 100),
+            );
+            bar.style.width = `${width}%`;
+          });
+        });
+
+        userUsageFooter.textContent = state.userUsage.syncedAt
+          ? `最后同步：${formatDate(state.userUsage.syncedAt)}`
+          : "";
+      }
+
+      function measureUserUsageLabelWidth(users) {
+        if (!users.length) return 0;
+        const sample = document.createElement("span");
+        sample.className = "user-usage-label";
+        sample.style.position = "fixed";
+        sample.style.visibility = "hidden";
+        sample.style.width = "auto";
+        sample.style.maxWidth = "none";
+        sample.style.pointerEvents = "none";
+        document.body.append(sample);
+        let maxWidth = 0;
+        users.forEach((user) => {
+          sample.textContent = user.label || user.user_id || "";
+          maxWidth = Math.max(maxWidth, sample.getBoundingClientRect().width);
+        });
+        sample.remove();
+        return Math.ceil(maxWidth);
+      }
+
+      function openUserDialog(user) {
+        state.userUsage.dialogUser = user || null;
+        state.userUsage.dialogSortKey = "time";
+        state.userUsage.dialogSortDirection = "desc";
+        renderUserDialog();
+        userDialogOverlay.classList.add("open");
+      }
+
+      function closeUserDialog() {
+        userDialogOverlay.classList.remove("open");
+        state.userUsage.dialogUser = null;
+      }
+
+      function sortUserDialog(key) {
+        if (state.userUsage.dialogSortKey === key) {
+          state.userUsage.dialogSortDirection =
+            state.userUsage.dialogSortDirection === "asc" ? "desc" : "asc";
+        } else {
+          state.userUsage.dialogSortKey = key;
+          state.userUsage.dialogSortDirection = key === "time" ? "desc" : "desc";
+        }
+        renderUserDialog();
+      }
+
+      function sortedUserDialogs() {
+        const dialogs = [...(state.userUsage.dialogUser?.dialogs || [])];
+        const key = state.userUsage.dialogSortKey || "time";
+        const direction = state.userUsage.dialogSortDirection === "asc" ? 1 : -1;
+        dialogs.sort((left, right) => {
+          let leftValue;
+          let rightValue;
+          if (key === "tokens") {
+            leftValue = Number(left.tokens || 0);
+            rightValue = Number(right.tokens || 0);
+          } else {
+            leftValue = new Date(left.created_at || 0).getTime();
+            rightValue = new Date(right.created_at || 0).getTime();
+          }
+          if (leftValue === rightValue) return 0;
+          return leftValue > rightValue ? direction : -direction;
+        });
+        return dialogs;
+      }
+
+      function renderUserDialog() {
+        const user = state.userUsage.dialogUser;
+        const title = user ? `${user.label || user.user_id || ""}` : "";
+        userDialogTarget.textContent = title
+          ? `${title}${user.user_id ? `（${user.user_id}）` : ""}`
+          : "";
+        sortUserDialogTokensIcon.textContent =
+          state.userUsage.dialogSortKey === "tokens"
+            ? state.userUsage.dialogSortDirection === "asc"
+              ? "↑"
+              : "↓"
+            : "";
+        sortUserDialogTimeIcon.textContent =
+          state.userUsage.dialogSortKey === "time"
+            ? state.userUsage.dialogSortDirection === "asc"
+              ? "↑"
+              : "↓"
+            : "";
+
+        userDialogTableBody.innerHTML = "";
+        const dialogs = sortedUserDialogs();
+        if (!dialogs.length) {
+          const row = document.createElement("tr");
+          const cell = document.createElement("td");
+          cell.colSpan = 3;
+          cell.className = "history-empty";
+          cell.textContent = "当前统计窗口内暂无对话数据";
+          row.append(cell);
+          userDialogTableBody.append(row);
+          return;
+        }
+
+        dialogs.forEach((dialog) => {
+          const row = document.createElement("tr");
+
+          const promptCell = document.createElement("td");
+          promptCell.className = "dialog-text-cell";
+          const promptText = dialog.prompt || "（无文本）";
+          const promptWrap = document.createElement("span");
+          promptWrap.className = "dialog-prompt-wrap";
+          promptCell.textContent = "";
+          if (dialog.has_quote) {
+            const quoteTag = document.createElement("span");
+            quoteTag.className = "dialog-quote-tag";
+            quoteTag.textContent = "含引用";
+            promptWrap.append(quoteTag);
+          }
+          const promptSpan = document.createElement("span");
+          promptSpan.className = "dialog-prompt-text";
+          promptSpan.textContent = promptText;
+          promptWrap.append(promptSpan);
+          promptCell.title = `${dialog.has_quote ? "含引用 " : ""}${promptText}`;
+          promptCell.append(promptWrap);
+
+          const tokenCell = document.createElement("td");
+          tokenCell.className = "dialog-number-cell";
+          tokenCell.textContent = dialog.display || formatTokenNumber(dialog.tokens || 0);
+
+          const timeCell = document.createElement("td");
+          timeCell.className = "dialog-time-cell";
+          timeCell.textContent = dialog.time || "";
+
+          row.append(promptCell, tokenCell, timeCell);
+          userDialogTableBody.append(row);
+        });
+      }
+
+      function renderHistoryTotal() {
+        const totalText =
+          state.history.selectedGroupId && state.history.rangeTotalDisplay
+            ? state.history.rangeTotalDisplay
+            : "";
+        historyRangeTotal.textContent = totalText;
+        historyRangeTotal.title = totalText
+          ? `${historyRangeLabel(state.history.range)} token 用量总和：${totalText}`
+          : "";
+      }
+
+      function formatHistoryTokenNumber(value, decimals = 2) {
+        const tokens = Math.max(0, Math.round(Number(value || 0)));
+        if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(decimals)} M`;
+        if (tokens >= 1000) return `${(tokens / 1000).toFixed(decimals)} K`;
+        return String(tokens);
+      }
+
+      function historyHourRangeLabel(startLabel, endLabel) {
+        if (!startLabel || startLabel === endLabel) return startLabel || "";
+        const startHour = String(startLabel).split(":")[0];
+        const endHour = String(endLabel).split(":")[0];
+        return `${startHour}-${endHour}`;
+      }
+
+      function aggregateHistoryBars(bars, bucketSize) {
+        const step = Math.max(1, Number(bucketSize || 1));
+        if (step === 1) return bars;
+        const result = [];
+        for (let index = 0; index < bars.length; index += step) {
+          const chunk = bars.slice(index, index + step);
+          const tokens = chunk.reduce((sum, bar) => sum + Number(bar.tokens || 0), 0);
+          const first = chunk[0] || {};
+          const last = chunk[chunk.length - 1] || first;
+          result.push({
+            label: historyHourRangeLabel(first.label, last.label),
+            tokens,
+            display: formatHistoryTokenNumber(tokens, 1),
+            bucket: first.bucket || "",
+            group_id: first.group_id || "",
+          });
+        }
+        return result;
+      }
+
+      function historyChartInnerWidth() {
+        const style = window.getComputedStyle(historyChart);
+        const padding =
+          Number.parseFloat(style.paddingLeft || "0") +
+          Number.parseFloat(style.paddingRight || "0");
+        return Math.max(0, (historyChart.clientWidth || 0) - padding);
+      }
+
+      function estimateHistoryValueWidth(bars) {
+        const sample = document.createElement("span");
+        sample.className = "history-bar-value";
+        sample.style.position = "fixed";
+        sample.style.visibility = "hidden";
+        sample.style.pointerEvents = "none";
+        document.body.append(sample);
+        let maxWidth = 0;
+        bars.forEach((bar) => {
+          sample.textContent = bar.display || formatHistoryTokenNumber(bar.tokens || 0, 1);
+          maxWidth = Math.max(maxWidth, sample.getBoundingClientRect().width);
+        });
+        sample.remove();
+        return maxWidth + 4;
+      }
+
+      function fitsHistoryBars(bars, availableWidth) {
+        if (!bars.length) return true;
+        const gapWidth = Math.max(0, (bars.length - 1) * 8);
+        const slotWidth = (Math.max(0, availableWidth - gapWidth) / bars.length);
+        return slotWidth >= estimateHistoryValueWidth(bars);
+      }
+
+      function resolveHistoryBarsForViewport(bars) {
+        if (state.history.range !== "24h" || !state.history.selectedGroupId) {
+          return bars;
+        }
+        const availableWidth = historyChartInnerWidth();
+        if (!availableWidth) return aggregateHistoryBars(bars, 4);
+        const twoHourBars = aggregateHistoryBars(bars, 2);
+        if (fitsHistoryBars(twoHourBars, availableWidth)) return twoHourBars;
+        const threeHourBars = aggregateHistoryBars(bars, 3);
+        if (fitsHistoryBars(threeHourBars, availableWidth)) return threeHourBars;
+        return aggregateHistoryBars(bars, 4);
+      }
+
+      function hideHistoryTooltip() {
+        historyTooltip.classList.remove("open");
+      }
+
+      function showHistoryTooltip(bar, event) {
+        const valueText = bar.display || formatTokenNumber(bar.tokens || 0);
+        historyTooltipLabel.textContent = bar.label || "";
+        historyTooltipValue.textContent = valueText;
+        historyTooltip.classList.add("open");
+
+        const margin = 10;
+        const offset = 14;
+        const rect = historyTooltip.getBoundingClientRect();
+        let left = event.clientX + offset;
+        let top = event.clientY + offset;
+        if (left + rect.width + margin > window.innerWidth) {
+          left = event.clientX - rect.width - offset;
+        }
+        if (top + rect.height + margin > window.innerHeight) {
+          top = event.clientY - rect.height - offset;
+        }
+        historyTooltip.style.left = `${Math.max(margin, left)}px`;
+        historyTooltip.style.top = `${Math.max(margin, top)}px`;
+      }
+
+      function renderHistoryChart() {
+        hideHistoryTooltip();
+        const bars = resolveHistoryBarsForViewport(state.history.bars || []);
+        historyChart.innerHTML = "";
+        historyXAxis.innerHTML = "";
+        historyYAxis.innerHTML = "";
+
+        if (!bars.length) {
+          historyYAxis.append(document.createElement("span"));
+          const empty = document.createElement("div");
+          empty.className = "history-empty";
+          empty.textContent = "暂无历史 token 用量";
+          historyChart.append(empty);
+          historyFooter.textContent = state.history.syncedAt
+            ? `最后同步：${formatDate(state.history.syncedAt)}`
+            : "";
+          return;
+        }
+
+        const maxValue = Math.max(...bars.map((bar) => Number(bar.tokens || 0)), 1);
+        [maxValue, Math.round(maxValue / 2), 0].forEach((value) => {
+          const label = document.createElement("span");
+          label.textContent = formatTokenNumber(value);
+          historyYAxis.append(label);
+        });
+
+        const labelStep = bars.length > 16 ? Math.ceil(bars.length / 12) : 1;
+        bars.forEach((bar, index) => {
+          const item = document.createElement("div");
+          item.className = "history-bar-item";
+
+          const value = document.createElement("div");
+          value.className = "history-bar-value";
+          value.textContent = bar.display || formatTokenNumber(bar.tokens || 0);
+
+          const column = document.createElement("div");
+          column.className = "history-bar";
+          column.title = `${bar.label}: ${value.textContent}`;
+          column.style.height = "0%";
+          column.addEventListener("click", (event) => {
+            event.stopPropagation();
+            showHistoryTooltip(bar, event);
+          });
+
+          item.append(value, column);
+          historyChart.append(item);
+
+          const xLabel = document.createElement("div");
+          xLabel.className = "history-x-label";
+          xLabel.textContent = index % labelStep === 0 ? bar.label : "";
+          xLabel.title = bar.label;
+          historyXAxis.append(xLabel);
+
+          window.requestAnimationFrame(() => {
+            const height = Math.max(2, Math.round((Number(bar.tokens || 0) / maxValue) * 86));
+            column.style.height = `${height}%`;
+          });
+        });
+
+        historyFooter.textContent = state.history.syncedAt
+          ? `最后同步：${formatDate(state.history.syncedAt)}`
+          : "";
+      }
+
+      function formatTokenNumber(value) {
+        const tokens = Math.max(0, Number(value || 0));
+        if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(2)} M`;
+        if (tokens >= 1000) return `${(tokens / 1000).toFixed(2)} K`;
+        return String(Math.round(tokens));
+      }
+
+      async function loadHistory() {
+        const params = {
+          range: state.history.range || "24h",
+        };
+        if (state.history.selectedGroupId) {
+          params.group_id = state.history.selectedGroupId;
+        }
+        const payload = await api.apiGet("history", params);
+        state.history.groups = payload.groups || [];
+        state.history.selectedGroupId = payload.selected_group_id || "";
+        state.history.range = payload.range || state.history.range || "24h";
+        state.history.bars = payload.bars || [];
+        state.history.rangeTotalTokens = Number(payload.range_total_tokens || 0);
+        state.history.rangeTotalDisplay = payload.range_total_display || "";
+        state.history.syncedAt = payload.synced_at || "";
+        renderHistoryControls();
+        renderHistoryTotal();
+        renderHistoryChart();
+      }
+
+      async function loadUserUsage() {
+        const params = {};
+        if (state.userUsage.selectedGroupId) {
+          params.group_id = state.userUsage.selectedGroupId;
+        }
+        const payload = await api.apiGet("user-usage", params);
+        state.userUsage.groups = payload.groups || [];
+        state.userUsage.selectedGroupId = payload.selected_group_id || "";
+        state.userUsage.users = payload.users || [];
+        state.userUsage.window = payload.window || null;
+        state.userUsage.syncedAt = payload.synced_at || "";
+        renderUserUsageControls();
+        renderUserUsageWindow();
+        renderUserUsageChart();
+      }
+
+      async function reloadUserUsage() {
+        userUsageChart.innerHTML = '<div class="history-empty">加载中...</div>';
+        userUsageFooter.textContent = "";
+        refreshUserUsageBtn.disabled = true;
+        try {
+          await loadUserUsage();
+        } catch (error) {
+          userUsageChart.innerHTML = `<div class="history-empty">${
+            error.message || error
+          }</div>`;
+        } finally {
+          refreshUserUsageBtn.disabled = false;
+        }
+      }
+
+      async function loadConfig() {
+        const payload = await api.apiGet("config");
+        state.config = payload.config || {};
+        state.schema = payload.schema || {};
+      }
+
+      async function loadUsage() {
+        const payload = await api.apiGet("usage");
+        renderUsage(payload);
+      }
+
+      async function openConfig() {
+        setToast("");
+        await loadConfig();
+        state.draft = JSON.parse(JSON.stringify(state.config));
+        renderConfigForm();
+        overlay.classList.add("open");
+      }
+
+      async function openStrategy() {
+        setStrategyToast("");
+        await loadConfig();
+        const policy =
+          state.config.over_limit_policy ||
+          state.schema.over_limit_policy?.default ||
+          {};
+        state.strategyDraft = JSON.parse(JSON.stringify(policy));
+        state.strategyDraft.action = state.strategyDraft.action || "stop_llm";
+        renderStrategyForm();
+        strategyOverlay.classList.add("open");
+      }
+
+      function closeConfig() {
+        overlay.classList.remove("open");
+        state.draft = {};
+        setToast("");
+      }
+
+      function closeStrategy() {
+        strategyOverlay.classList.remove("open");
+        state.strategyDraft = {};
+        setStrategyToast("");
+      }
+
+      async function openHistory() {
+        state.history.selectedGroupId = "";
+        state.history.range = "24h";
+        state.history.bars = [];
+        state.history.rangeTotalTokens = 0;
+        state.history.rangeTotalDisplay = "";
+        state.history.syncedAt = "";
+        renderHistoryControls();
+        renderHistoryTotal();
+        historyOverlay.classList.add("open");
+        await reloadHistory();
+      }
+
+      function closeHistory() {
+        historyOverlay.classList.remove("open");
+        closeCustomSelects();
+        hideHistoryTooltip();
+      }
+
+      async function openUserUsage() {
+        state.userUsage.selectedGroupId = "";
+        state.userUsage.users = [];
+        state.userUsage.window = null;
+        state.userUsage.syncedAt = "";
+        renderUserUsageControls();
+        renderUserUsageWindow();
+        renderUserUsageChart();
+        userUsageOverlay.classList.add("open");
+        await reloadUserUsage();
+      }
+
+      function closeUserUsage() {
+        closeUserDialog();
+        userUsageOverlay.classList.remove("open");
+        closeCustomSelects();
+      }
+
+      function handleHistoryResize() {
+        if (
+          historyResizeFrame ||
+          !historyOverlay.classList.contains("open") ||
+          state.history.range !== "24h" ||
+          !state.history.selectedGroupId
+        ) {
+          return;
+        }
+        historyResizeFrame = window.requestAnimationFrame(() => {
+          historyResizeFrame = 0;
+          renderHistoryChart();
+        });
+      }
+
+      function openRemark(groupId, remark) {
+        state.currentRemarkGroupId = String(groupId || "");
+        remarkTarget.textContent = `QQ 群号：${state.currentRemarkGroupId}`;
+        remarkInput.value = remark || "";
+        setRemarkToast("");
+        remarkOverlay.classList.add("open");
+        window.requestAnimationFrame(() => {
+          remarkInput.focus();
+          remarkInput.select();
+        });
+      }
+
+      function closeRemark() {
+        remarkOverlay.classList.remove("open");
+        state.currentRemarkGroupId = "";
+        remarkInput.value = "";
+        setRemarkToast("");
+      }
+
+      async function openGroupSettings(group) {
+        state.currentSettingsGroupId = String(group.group_id || "");
+        groupSettingsTarget.textContent = `QQ 群号：${state.currentSettingsGroupId}`;
+        groupLimitInput.value = group.primary_limit_tokens ?? group.global_limit_tokens ?? "";
+        state.currentSettingsInitialLimit = Number.parseInt(
+          groupLimitInput.value || "0",
+          10,
+        );
+        groupOnlyAtBotInput.checked = Boolean(group.only_at_bot_llm);
+        state.currentSettingsInitialOnlyAtBot = groupOnlyAtBotInput.checked;
+        groupContextLimitInput.checked = Boolean(group.context_limit_05);
+        state.currentSettingsInitialContextLimit05 = groupContextLimitInput.checked;
+        groupPromptCacheInput.checked = Boolean(group.prompt_cache_key_strategy);
+        state.currentSettingsInitialPromptCache = groupPromptCacheInput.checked;
+        groupDeepSeekCacheInput.checked = Boolean(group.deepseek_cache_strategy);
+        state.currentSettingsInitialDeepSeekCache = groupDeepSeekCacheInput.checked;
+        state.currentSettingsCacheWarningTouched = false;
+        updateGroupContextLimitValue();
+        setGroupSettingsResetEnabled(group.has_custom_limit);
+        groupSettingsHint.textContent = group.has_custom_limit
+          ? "当前使用该群聊的个性化上限；保存后不会随全局上限变化。"
+          : `当前显示全局上限：${group.global_limit_display || group.primary_limit_display || ""}`;
+        groupSettingsOverlay.classList.add("open");
+        clearGroupSettingsToast();
+
+        try {
+          const payload = await api.apiGet("group-settings", {
+            group_id: state.currentSettingsGroupId,
+          });
+          groupLimitInput.value = String(payload.daily_token_limit ?? "");
+          state.currentSettingsInitialLimit = Number.parseInt(
+            groupLimitInput.value || "0",
+            10,
+          );
+          setGroupSettingsResetEnabled(payload.has_custom_limit);
+          groupOnlyAtBotInput.checked = Boolean(payload.only_at_bot_llm);
+          state.currentSettingsInitialOnlyAtBot = groupOnlyAtBotInput.checked;
+          groupContextLimitInput.checked = Boolean(payload.context_limit_05);
+          state.currentSettingsInitialContextLimit05 = groupContextLimitInput.checked;
+          groupPromptCacheInput.checked = Boolean(payload.prompt_cache_key_strategy);
+          state.currentSettingsInitialPromptCache = groupPromptCacheInput.checked;
+          groupDeepSeekCacheInput.checked = Boolean(payload.deepseek_cache_strategy);
+          state.currentSettingsInitialDeepSeekCache = groupDeepSeekCacheInput.checked;
+          state.currentSettingsCacheWarningTouched = false;
+          groupSettingsHint.textContent = payload.has_custom_limit
+            ? "当前使用该群聊的个性化上限；保存后不会随全局上限变化。"
+            : `当前显示全局上限：${payload.global_daily_token_limit_display || ""}`;
+          updateGroupContextLimitValue();
+        } catch (error) {
+          setGroupSettingsToast(error.message || String(error), true);
+        }
+
+        window.requestAnimationFrame(() => {
+          groupLimitInput.focus();
+          groupLimitInput.select();
+        });
+      }
+
+      function closeGroupSettings() {
+        groupSettingsOverlay.classList.remove("open");
+        state.currentSettingsGroupId = "";
+        state.currentSettingsInitialLimit = null;
+        state.currentSettingsInitialOnlyAtBot = false;
+        state.currentSettingsInitialContextLimit05 = false;
+        state.currentSettingsInitialPromptCache = false;
+        state.currentSettingsInitialDeepSeekCache = false;
+        state.currentSettingsCacheWarningTouched = false;
+        setGroupSettingsResetEnabled(false);
+        groupLimitInput.value = "";
+        groupOnlyAtBotInput.checked = false;
+        groupContextLimitInput.checked = false;
+        groupPromptCacheInput.checked = false;
+        groupDeepSeekCacheInput.checked = false;
+        groupContextLimitValue.textContent = "";
+        groupSettingsHint.textContent = "";
+        setGroupSettingsToast("");
+      }
+
+      async function saveConfig() {
+        try {
+          setToast("保存中...");
+          const payload = await api.apiPost("config", { config: state.draft });
+          state.config = payload.config || {};
+          closeConfig();
+          await loadUsage();
+        } catch (error) {
+          setToast(error.message || String(error), true);
+        }
+      }
+
+      async function saveStrategy() {
+        try {
+          setStrategyToast("保存中...");
+          const payload = await api.apiPost("config", {
+            config: {
+              ...state.config,
+              over_limit_policy: state.strategyDraft,
+            },
+          });
+          state.config = payload.config || {};
+          closeStrategy();
+          await loadUsage();
+        } catch (error) {
+          setStrategyToast(error.message || String(error), true);
+        }
+      }
+
+      async function saveRemark() {
+        if (!state.currentRemarkGroupId) return;
+
+        try {
+          setRemarkToast("保存中...");
+          await api.apiPost("remarks", {
+            group_id: state.currentRemarkGroupId,
+            remark: remarkInput.value,
+          });
+          closeRemark();
+          await loadUsage();
+        } catch (error) {
+          setRemarkToast(error.message || String(error), true);
+        }
+      }
+
+      async function saveGroupSettings() {
+        if (!state.currentSettingsGroupId) return;
+
+        try {
+          setGroupSettingsToast("保存中...");
+          const value = Number.parseInt(groupLimitInput.value || "0", 10);
+          const nextValue = Number.isNaN(value) ? 0 : value;
+          const nextOnlyAtBot = Boolean(groupOnlyAtBotInput.checked);
+          const nextContextLimit05 = Boolean(groupContextLimitInput.checked);
+          const nextPromptCache = Boolean(groupPromptCacheInput.checked);
+          const nextDeepSeekCache = Boolean(groupDeepSeekCacheInput.checked);
+          if (
+            nextValue === state.currentSettingsInitialLimit &&
+            nextOnlyAtBot === state.currentSettingsInitialOnlyAtBot &&
+            nextContextLimit05 === state.currentSettingsInitialContextLimit05 &&
+            nextPromptCache === state.currentSettingsInitialPromptCache &&
+            nextDeepSeekCache === state.currentSettingsInitialDeepSeekCache
+          ) {
+            closeGroupSettings();
+            return;
+          }
+          const payload = {
+            group_id: state.currentSettingsGroupId,
+          };
+          if (nextValue !== state.currentSettingsInitialLimit) {
+            payload.daily_token_limit = nextValue;
+          }
+          if (nextOnlyAtBot !== state.currentSettingsInitialOnlyAtBot) {
+            payload.only_at_bot_llm = nextOnlyAtBot;
+          }
+          if (nextContextLimit05 !== state.currentSettingsInitialContextLimit05) {
+            payload.context_limit_05 = nextContextLimit05;
+          }
+          if (nextPromptCache !== state.currentSettingsInitialPromptCache) {
+            payload.prompt_cache_key_strategy = nextPromptCache;
+          }
+          if (nextDeepSeekCache !== state.currentSettingsInitialDeepSeekCache) {
+            payload.deepseek_cache_strategy = nextDeepSeekCache;
+          }
+          await api.apiPost("group-settings", payload);
+          closeGroupSettings();
+          await loadUsage();
+        } catch (error) {
+          setGroupSettingsToast(error.message || String(error), true);
+        }
+      }
+
+      async function resetGroupSettings() {
+        if (!state.currentSettingsGroupId || !state.currentSettingsHasCustomLimit) {
+          return;
+        }
+
+        try {
+          setGroupSettingsToast("重置中...");
+          await api.apiPost("group-settings", {
+            group_id: state.currentSettingsGroupId,
+            reset: true,
+          });
+          closeGroupSettings();
+          await loadUsage();
+        } catch (error) {
+          setGroupSettingsToast(error.message || String(error), true);
+        }
+      }
+
+      document.getElementById("openConfigBtn").addEventListener("click", openConfig);
+      document.getElementById("openStrategyBtn").addEventListener("click", openStrategy);
+      document.getElementById("openHistoryBtn").addEventListener("click", openHistory);
+      document.getElementById("openUserUsageBtn").addEventListener("click", openUserUsage);
+      document.getElementById("cancelBtn").addEventListener("click", closeConfig);
+      document.getElementById("saveBtn").addEventListener("click", saveConfig);
+      document.getElementById("refreshBtn").addEventListener("click", loadUsage);
+      document.getElementById("cancelStrategyBtn").addEventListener("click", closeStrategy);
+      document.getElementById("saveStrategyBtn").addEventListener("click", saveStrategy);
+      document.getElementById("cancelHistoryBtn").addEventListener("click", closeHistory);
+      document
+        .getElementById("cancelUserUsageBtn")
+        .addEventListener("click", closeUserUsage);
+      document
+        .getElementById("closeUserDialogBtn")
+        .addEventListener("click", closeUserDialog);
+      sortUserDialogTokensBtn.addEventListener("click", () => {
+        sortUserDialog("tokens");
+      });
+      sortUserDialogTimeBtn.addEventListener("click", () => {
+        sortUserDialog("time");
+      });
+      refreshUserUsageBtn.addEventListener("click", reloadUserUsage);
+      document.getElementById("cancelRemarkBtn").addEventListener("click", closeRemark);
+      document.getElementById("saveRemarkBtn").addEventListener("click", saveRemark);
+      document
+        .getElementById("cancelGroupSettingsBtn")
+        .addEventListener("click", closeGroupSettings);
+      document
+        .getElementById("saveGroupSettingsBtn")
+        .addEventListener("click", saveGroupSettings);
+      resetGroupLimitBtn.addEventListener("click", resetGroupSettings);
+      groupLimitInput.addEventListener("input", updateGroupContextLimitValue);
+      groupContextLimitInput.addEventListener("change", updateGroupContextLimitWarning);
+      groupPromptCacheInput.addEventListener("change", updateGroupCacheStrategyWarning);
+      groupDeepSeekCacheInput.addEventListener("change", updateGroupCacheStrategyWarning);
+      groupSelectTrigger.addEventListener("click", (event) => {
+        event.stopPropagation();
+        toggleCustomSelect(groupSelect);
+      });
+      groupSelectMenu.addEventListener("click", (event) => {
+        event.stopPropagation();
+      });
+      rangeSelectTrigger.addEventListener("click", (event) => {
+        event.stopPropagation();
+        toggleCustomSelect(rangeSelect);
+      });
+      rangeSelectMenu.addEventListener("click", (event) => {
+        event.stopPropagation();
+      });
+      userGroupSelectTrigger.addEventListener("click", (event) => {
+        event.stopPropagation();
+        toggleCustomSelect(userGroupSelect);
+      });
+      userGroupSelectMenu.addEventListener("click", (event) => {
+        event.stopPropagation();
+      });
+      document.addEventListener("click", () => {
+        closeCustomSelects();
+        hideHistoryTooltip();
+      });
+      window.addEventListener("resize", handleHistoryResize);
+      overlay.addEventListener("click", (event) => {
+        if (event.target === overlay) closeConfig();
+      });
+      strategyOverlay.addEventListener("click", (event) => {
+        if (event.target === strategyOverlay) closeStrategy();
+      });
+      historyOverlay.addEventListener("click", (event) => {
+        if (event.target === historyOverlay) closeHistory();
+      });
+      userUsageOverlay.addEventListener("click", (event) => {
+        if (event.target === userUsageOverlay) closeUserUsage();
+      });
+      userDialogOverlay.addEventListener("click", (event) => {
+        if (event.target === userDialogOverlay) closeUserDialog();
+      });
+      remarkOverlay.addEventListener("click", (event) => {
+        if (event.target === remarkOverlay) closeRemark();
+      });
+      groupSettingsOverlay.addEventListener("click", (event) => {
+        if (event.target === groupSettingsOverlay) closeGroupSettings();
+      });
+      remarkInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          saveRemark();
+        } else if (event.key === "Escape") {
+          closeRemark();
+        }
+      });
+      groupLimitInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          saveGroupSettings();
+        } else if (event.key === "Escape") {
+          closeGroupSettings();
+        }
+      });
+
+      async function init() {
+        await api.ready();
+        await loadConfig();
+        await loadUsage();
+      }
+
+      init().catch((error) => {
+        usageList.innerHTML = `<div class="empty">${error.message || error}</div>`;
+      });
+    </script>
+  </body>
+</html>
