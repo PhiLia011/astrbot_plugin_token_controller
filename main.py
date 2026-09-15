@@ -67,6 +67,8 @@ TOKEN_LIMIT_IMAGE_TOKEN_ESTIMATE = 765
 TOKEN_LIMIT_AUDIO_TOKEN_ESTIMATE = 500
 OVER_LIMIT_STOP = "stop_llm"
 OVER_LIMIT_FALLBACK = "fallback_provider"
+LIMIT_MODE_WHITELIST = "whitelist"
+LIMIT_MODE_BLACKLIST = "blacklist"
 TOKEN_FIELDS_SUM = (
     ProviderStat.token_input_other
     + ProviderStat.token_input_cached
@@ -80,6 +82,14 @@ CONFIG_SCHEMA: dict[str, dict[str, Any]] = {
         "type": "bool",
         "hint": "关闭后不统计限流状态，也不会拦截任何 LLM 请求。",
         "default": True,
+    },
+    "limit_mode": {
+        "description": "限流范围模式",
+        "type": "string",
+        "hint": "白名单：仅「需要限流的 QQ 群聊列表」中的群受限流。黑名单：列表中的群不受限流，其余所有 QQ 群全部限流。",
+        "default": LIMIT_MODE_WHITELIST,
+        "options": [LIMIT_MODE_WHITELIST, LIMIT_MODE_BLACKLIST],
+        "option_labels": ["白名单模式（仅列表内限流）", "黑名单模式（除列表外全部限流）"],
     },
     "limited_groups": {
         "description": "需要限流的 QQ 群聊列表",
@@ -659,6 +669,20 @@ class Main(UserLimitMixin, UserStatsMixin, HistoryStatsMixin, Star):
                 seen.add(group_id)
                 groups.append(group_id)
         return groups
+
+    def _limit_mode(self) -> str:
+        mode = str(self._config_value("limit_mode") or LIMIT_MODE_WHITELIST).strip().lower()
+        if mode not in (LIMIT_MODE_WHITELIST, LIMIT_MODE_BLACKLIST):
+            return LIMIT_MODE_WHITELIST
+        return mode
+
+    def _group_in_scope(self, group_id: str) -> bool:
+        if not group_id:
+            return False
+        groups = self._limited_groups()
+        if self._limit_mode() == LIMIT_MODE_BLACKLIST:
+            return group_id not in groups
+        return group_id in groups
 
     def _qq_platform_names(self) -> set[str]:
         values = _split_group_values(self._config_value("qq_platform_names"))
@@ -1711,7 +1735,7 @@ class Main(UserLimitMixin, UserStatsMixin, HistoryStatsMixin, Star):
         if not self._is_qq_group_event(event):
             return None
         group_id = self._event_group_id(event)
-        if not group_id or group_id not in self._limited_groups():
+        if not group_id or not self._group_in_scope(group_id):
             return None
         if not self._group_only_at_bot_llm(group_id):
             return None
@@ -1923,7 +1947,7 @@ class Main(UserLimitMixin, UserStatsMixin, HistoryStatsMixin, Star):
             return None
 
         group_id = self._event_group_id(event)
-        if not group_id or group_id not in self._limited_groups():
+        if not group_id or not self._group_in_scope(group_id):
             return None
 
         limit = self._daily_limit_for_group(group_id)
@@ -1974,6 +1998,12 @@ class Main(UserLimitMixin, UserStatsMixin, HistoryStatsMixin, Star):
         groups = self._limited_groups()
         global_limit = self._daily_limit()
         group_settings = self._load_group_settings()
+        if self._limit_mode() == LIMIT_MODE_BLACKLIST:
+            seen_groups = set(groups)
+            for extra_group_id in group_settings:
+                if extra_group_id not in seen_groups:
+                    seen_groups.add(extra_group_id)
+                    groups.append(extra_group_id)
         group_limits = {
             group_id: int(settings[GROUP_SETTING_DAILY_LIMIT])
             for group_id, settings in group_settings.items()
@@ -2080,6 +2110,7 @@ class Main(UserLimitMixin, UserStatsMixin, HistoryStatsMixin, Star):
 
         return {
             "enabled": self._is_enabled(),
+            "limit_mode": self._limit_mode(),
             "groups": items,
             "remarks": remarks,
             "group_limits": group_limits,
@@ -2153,6 +2184,13 @@ class Main(UserLimitMixin, UserStatsMixin, HistoryStatsMixin, Star):
         if "limited_groups" in raw_config:
             next_config["limited_groups"] = self._normalize_config_list(
                 raw_config["limited_groups"]
+            )
+        if "limit_mode" in raw_config:
+            mode = str(raw_config["limit_mode"] or "").strip().lower()
+            next_config["limit_mode"] = (
+                mode
+                if mode in (LIMIT_MODE_WHITELIST, LIMIT_MODE_BLACKLIST)
+                else LIMIT_MODE_WHITELIST
             )
         if "daily_token_limit" in raw_config:
             try:

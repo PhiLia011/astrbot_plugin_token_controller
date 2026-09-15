@@ -1184,6 +1184,9 @@
             <button id="openConfigBtn" class="config-button" type="button">
               插件基础配置 ...
             </button>
+            <button id="modeToggleBtn" class="config-button" type="button">
+              限流范围：加载中…
+            </button>
             <button id="openStrategyBtn" class="strategy-button" type="button">
               用量超限策略配置
             </button>
@@ -1470,6 +1473,7 @@
       const api = window.AstrBotPluginPage;
       const state = {
         config: {},
+        limitMode: "whitelist",
         draft: {},
         strategyDraft: {},
         schema: {},
@@ -1866,20 +1870,58 @@
         }
       }
 
+      function updateModeToggleLabel() {
+        const btn = document.getElementById("modeToggleBtn");
+        if (!btn) return;
+        const isBlacklist = state.limitMode === "blacklist";
+        btn.textContent = isBlacklist
+          ? "限流范围：黑名单模式（点击切换）"
+          : "限流范围：白名单模式（点击切换）";
+        btn.title = isBlacklist
+          ? "当前：列表中的群不受限流，其余所有 QQ 群全部限流。点击切换为白名单模式。"
+          : "当前：仅列表中的群受限流。点击切换为黑名单模式。";
+      }
+
+      async function toggleLimitMode() {
+        const btn = document.getElementById("modeToggleBtn");
+        if (btn) btn.disabled = true;
+        try {
+          await loadConfig();
+          const current = String(state.config.limit_mode || "whitelist");
+          const next = current === "blacklist" ? "whitelist" : "blacklist";
+          const payload = await api.apiPost("config", {
+            config: { ...state.config, limit_mode: next },
+          });
+          state.config = payload.config || state.config;
+          state.limitMode = state.config.limit_mode || next;
+          updateModeToggleLabel();
+          await loadUsage();
+        } catch (error) {
+          statusLine.textContent = `切换失败：${error.message || error}`;
+        } finally {
+          if (btn) btn.disabled = false;
+        }
+      }
+
       function renderUsage(payload) {
         const groups = payload.groups || [];
+        state.limitMode = payload.limit_mode || state.limitMode || "whitelist";
+        updateModeToggleLabel();
         windowText.textContent = payload.window
           ? `${formatDate(payload.window.start)} - ${formatDate(payload.window.end)}`
           : "";
         statusLine.textContent = payload.enabled
-          ? "当前限流插件已启用"
+          ? `当前限流插件已启用（${state.limitMode === "blacklist" ? "黑名单" : "白名单"}模式）`
           : "当前限流插件未启用";
 
         usageList.innerHTML = "";
         if (!groups.length) {
           const empty = document.createElement("div");
           empty.className = "empty";
-          empty.textContent = "尚未配置需要限流的 QQ 群聊";
+          empty.textContent =
+            state.limitMode === "blacklist"
+              ? "黑名单模式：除列表外的群都在限流，暂无记录到的群聊"
+              : "尚未配置需要限流的 QQ 群聊";
           usageList.append(empty);
           return;
         }
@@ -2916,6 +2958,9 @@
       }
 
       document.getElementById("openConfigBtn").addEventListener("click", openConfig);
+      document
+        .getElementById("modeToggleBtn")
+        .addEventListener("click", toggleLimitMode);
       document.getElementById("openStrategyBtn").addEventListener("click", openStrategy);
       document.getElementById("openHistoryBtn").addEventListener("click", openHistory);
       document.getElementById("openUserUsageBtn").addEventListener("click", openUserUsage);
@@ -3018,6 +3063,8 @@
       async function init() {
         await api.ready();
         await loadConfig();
+        state.limitMode = state.config.limit_mode || "whitelist";
+        updateModeToggleLabel();
         await loadUsage();
       }
 

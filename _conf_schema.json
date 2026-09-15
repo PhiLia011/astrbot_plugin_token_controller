@@ -5,6 +5,14 @@
     "hint": "关闭后不统计限流状态，也不会拦截任何 LLM 请求。",
     "default": true
   },
+  "limit_mode": {
+    "description": "限流范围模式",
+    "type": "string",
+    "hint": "白名单：仅「需要限流的 QQ 群聊列表」中的群受限流。黑名单：列表中的群不受限流，其余所有 QQ 群全部限流。",
+    "default": "whitelist",
+    "options": ["whitelist", "blacklist"],
+    "option_labels": ["白名单模式（仅列表内限流）", "黑名单模式（除列表外全部限流）"]
+  },
   "limited_groups": {
     "description": "需要限流的 QQ 群聊列表",
     "type": "list",
